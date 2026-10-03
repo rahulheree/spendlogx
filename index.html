@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monthly Spend Analyzer</title>
+  
+  <!-- Inter & JetBrains Mono Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Geist Mono', 'monospace'],
+          },
+          colors: {
+            surface: {
+              DEFAULT: '#09090b',
+              subtle: '#121215',
+              card: '#18181b',
+              border: '#27272a',
+              hover: '#222226'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbar and aesthetics */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #09090b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272a;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3f3f46;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="month"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.8);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="bg-[#09090b] text-[#f4f4f5] font-sans antialiased min-h-screen selection:bg-zinc-700 selection:text-white pb-16">
+
+  <!-- Main Container -->
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+
+    <!-- Header & Month/Year Navigator -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 border-b border-surface-border">
+      <div>
+        <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-400 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          LOCAL SECURE STORAGE
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-white">Spend Ledger & Analyzer</h1>
+        <p class="text-xs sm:text-sm text-zinc-400 mt-1">Select any month and year to log, track, and inspect your financial outlays.</p>
+      </div>
+
+      <!-- Month & Year Controls -->
+      <div class="flex items-center gap-2 bg-surface-subtle border border-surface-border p-1.5 rounded-xl self-start md:self-auto shadow-sm">
+        <button id="prevMonthBtn" title="Previous Month" class="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+
+        <div class="relative flex items-center">
+          <span id="activeMonthDisplay" class="font-mono text-sm font-medium px-3 text-zinc-200 cursor-pointer select-none">
+            October 2026
+          </span>
+          <input type="month" id="monthPicker" class="absolute inset-0 opacity-0 cursor-pointer w-full" />
+        </div>
+
+        <button id="nextMonthBtn" title="Next Month" class="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+
+        <div class="h-4 w-px bg-zinc-800 mx-1"></div>
+
+        <button id="currentMonthBtn" class="text-xs px-2.5 py-1 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md font-mono transition-colors">
+          Today
+        </button>
+      </div>
+    </header>
+
+    <!-- Top Metrics Overview -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 my-8">
+      <div class="bg-surface-card border border-surface-border rounded-xl p-4 sm:p-5">
+        <span class="text-xs font-mono uppercase tracking-wider text-zinc-400">Total Spend</span>
+        <div id="statTotal" class="text-xl sm:text-2xl font-semibold font-mono text-white mt-1.5">₹0.00</div>
+        <p class="text-[11px] text-zinc-400 mt-1" id="statPeriodNote">Active month aggregate</p>
+      </div>
+
+      <div class="bg-surface-card border border-surface-border rounded-xl p-4 sm:p-5">
+        <span class="text-xs font-mono uppercase tracking-wider text-zinc-400">Daily Average</span>
+        <div id="statAvg" class="text-xl sm:text-2xl font-semibold font-mono text-zinc-300 mt-1.5">₹0.00</div>
+        <p class="text-[11px] text-zinc-400 mt-1" id="statAvgDays">0 active spend days</p>
+      </div>
+
+      <div class="bg-surface-card border border-surface-border rounded-xl p-4 sm:p-5">
+        <span class="text-xs font-mono uppercase tracking-wider text-zinc-400">Largest Expense</span>
+        <div id="statPeak" class="text-xl sm:text-2xl font-semibold font-mono text-zinc-300 mt-1.5">—</div>
+        <p id="statPeakNote" class="text-[11px] text-zinc-400 mt-1 truncate">No entries yet</p>
+      </div>
+
+      <div class="bg-surface-card border border-surface-border rounded-xl p-4 sm:p-5">
+        <span class="text-xs font-mono uppercase tracking-wider text-zinc-400">Transactions</span>
+        <div id="statCount" class="text-xl sm:text-2xl font-semibold font-mono text-zinc-300 mt-1.5">0</div>
+        <p id="statTopCat" class="text-[11px] text-zinc-400 mt-1 truncate">Top: None</p>
+      </div>
+    </section>
+
+    <!-- Manual Expense Entry Form -->
+    <section class="bg-surface-subtle border border-surface-border rounded-2xl p-5 sm:p-6 mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-medium uppercase tracking-wider text-zinc-300 font-mono flex items-center gap-2">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Record Expense
+        </h2>
+        <span class="text-xs text-zinc-400 font-mono" id="formCurrentMonthTag">for Selected Month</span>
+      </div>
+
+      <form id="expenseForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
+        <!-- Date Selector -->
+        <div class="lg:col-span-3">
+          <label class="block text-xs font-mono text-zinc-400 mb-1.5">Date</label>
+          <input type="date" id="entryDate" required
+            class="w-full bg-zinc-900 border border-surface-border rounded-lg px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono" />
+        </div>
+
+        <!-- Amount -->
+        <div class="lg:col-span-3">
+          <label class="block text-xs font-mono text-zinc-400 mb-1.5">Amount (₹)</label>
+          <div class="relative">
+            <span class="absolute left-3 top-2.5 text-zinc-400 font-mono text-sm">₹</span>
+            <input type="number" step="0.01" min="0.01" id="entryAmount" placeholder="0.00" required
+              class="w-full bg-zinc-900 border border-surface-border rounded-lg pl-7 pr-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono" />
+          </div>
+        </div>
+
+        <!-- Category -->
+        <div class="lg:col-span-3">
+          <label class="block text-xs font-mono text-zinc-400 mb-1.5">Category</label>
+          <select id="entryCategory"
+            class="w-full bg-zinc-900 border border-surface-border rounded-lg px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono">
+            <option value="Food & Dining">Food & Dining</option>
+            <option value="Utilities & Bills">Utilities & Bills</option>
+            <option value="Transport & Fuel">Transport & Fuel</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Healthcare">Healthcare</option>
+            <option value="Work & Tech">Work & Tech</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Miscellaneous">Miscellaneous</option>
+          </select>
+        </div>
+
+        <!-- Note / Description -->
+        <div class="sm:col-span-2 lg:col-span-3">
+          <label class="block text-xs font-mono text-zinc-400 mb-1.5">Note on Spend</label>
+          <input type="text" id="entryNote" placeholder="e.g., Grocery stock, Broadband bill" required
+            class="w-full bg-zinc-900 border border-surface-border rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
+        </div>
+
+        <!-- Submit Button -->
+        <div class="sm:col-span-2 lg:col-span-12 flex justify-end pt-1">
+          <button type="submit"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-zinc-100 hover:bg-white text-zinc-950 font-medium px-5 py-2.5 rounded-lg text-sm transition-all duration-150 active:scale-95 shadow-sm">
+            <span>Add Transaction</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Visual Charts (Analyzer) -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <!-- Daily Trend Chart -->
+      <div class="lg:col-span-2 bg-surface-card border border-surface-border rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">Daily Trajectory</h3>
+            <span class="text-xs text-zinc-400 font-mono" id="chartDateRangeNote">Day 1 to End of Month</span>
+          </div>
+          <div class="h-60 w-full relative">
+            <canvas id="dailyChart"></canvas>
+            <div id="dailyChartEmpty" class="absolute inset-0 flex items-center justify-center text-xs font-mono text-zinc-400 hidden">
+              No expenditures recorded for this timeline.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category Allocation Doughnut -->
+      <div class="bg-surface-card border border-surface-border rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">Category Spread</h3>
+            <span class="text-xs text-zinc-400 font-mono" id="categoryCountTag">0 Categories</span>
+          </div>
+          <div class="h-44 w-full relative flex items-center justify-center">
+            <canvas id="categoryChart"></canvas>
+            <div id="categoryChartEmpty" class="absolute inset-0 flex items-center justify-center text-xs font-mono text-zinc-400 hidden">
+              No categorized entries.
+            </div>
+          </div>
+        </div>
+        <div id="categoryLegend" class="mt-4 pt-3 border-t border-zinc-800/80 space-y-1.5 max-h-32 overflow-y-auto pr-1 text-xs">
+          <!-- Dynamic category breakdown rows -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Detailed Ledger Section -->
+    <section class="bg-surface-card border border-surface-border rounded-xl p-5">
+      <!-- Ledger Filter Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">
+        <div class="flex items-center gap-3">
+          <h3 class="text-sm font-semibold text-zinc-200">Monthly Ledger</h3>
+          <span id="ledgerBadgeCount" class="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">0 entries</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Note Search -->
+          <div class="relative">
+            <input type="text" id="searchInput" placeholder="Search notes or amounts..."
+              class="bg-zinc-900 border border-surface-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-44 sm:w-56" />
+            <svg class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </div>
+
+          <!-- Category Filter -->
+          <select id="categoryFilter"
+            class="bg-zinc-900 border border-surface-border rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500 font-mono">
+            <option value="ALL">All Categories</option>
+            <option value="Food & Dining">Food & Dining</option>
+            <option value="Utilities & Bills">Utilities & Bills</option>
+            <option value="Transport & Fuel">Transport & Fuel</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Healthcare">Healthcare</option>
+            <option value="Work & Tech">Work & Tech</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Miscellaneous">Miscellaneous</option>
+          </select>
+
+          <!-- Export CSV -->
+          <button id="exportCsvBtn" title="Export this month to CSV"
+            class="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-mono transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Export
+          </button>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="overflow-x-auto mt-2">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-surface-border text-[11px] font-mono uppercase text-zinc-400 tracking-wider">
+              <th class="py-3 px-3">Date</th>
+              <th class="py-3 px-3">Category</th>
+              <th class="py-3 px-3">Note on Spend</th>
+              <th class="py-3 px-3 text-right">Amount</th>
+              <th class="py-3 px-3 text-right w-12">Action</th>
+            </tr>
+          </thead>
+          <tbody id="ledgerTableBody" class="divide-y divide-zinc-800/60 text-xs text-zinc-300 font-mono">
+            <!-- Dynamically populated or empty state -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div id="tableEmptyState" class="py-12 text-center hidden">
+        <div class="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3 text-zinc-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        </div>
+        <p class="text-zinc-400 text-sm font-medium">No transactions for this selection</p>
+        <p class="text-zinc-400 text-xs mt-1">Add an entry using the form above to start tracking this month.</p>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="mt-12 pt-6 border-t border-zinc-900 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-400 gap-3 font-mono">
+      <span>Data stored locally in your browser storage.</span>
+      <button id="clearMonthDataBtn" class="text-red-400/70 hover:text-red-400 transition-colors">
+        Clear All Data
+      </button>
+    </footer>
+
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // State management
+    const STORAGE_KEY = 'pure_spend_tracker_data';
+    
+    // Initialize active year & month from system date (defaults to current date, selectable to any year)
+    let today = new Date();
+    let currentYear = today.getFullYear();
+    let currentMonth = today.getMonth(); // 0-indexed
+
+    let expenses = [];
+    let dailyChart = null;
+    let categoryChart = null;
+
+    // Load from LocalStorage (ZERO dummy data, purely user records)
+    function loadData() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          expenses = JSON.parse(raw);
+        } else {
+          expenses = [];
+        }
+      } catch (e) {
+        console.error("Storage load failed", e);
+        expenses = [];
+      }
+    }
+
+    // Save to LocalStorage
+    function saveData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+      } catch (e) {
+        console.error("Storage save failed", e);
+      }
+    }
+
+    // Date formatting helper
+    function getMonthKey(year, month) {
+      return `${year}-${String(month + 1).padStart(2, '0')}`;
+    }
+
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 2
+      }).format(amount);
+    }
+
+    // UI Updates
+    function updateDateHeaders() {
+      const monthNames = [
+        "January", "February", "March", "April", "May", "June", 
+        "July", "August", "September", "October", "November", "December"
+      ];
+      const monthText = `${monthNames[currentMonth]} ${currentYear}`;
+      document.getElementById('activeMonthDisplay').textContent = monthText;
+      document.getElementById('formCurrentMonthTag').textContent = `Month: ${monthText}`;
+      document.getElementById('statPeriodNote').textContent = `Total for ${monthText}`;
+
+      // Update native month picker value
+      const monthKey = getMonthKey(currentYear, currentMonth);
+      document.getElementById('monthPicker').value = monthKey;
+
+      // Update date input constraints
+      const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const minDate = `${monthKey}-01`;
+      const maxDate = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+      
+      const dateInput = document.getElementById('entryDate');
+      dateInput.min = minDate;
+      dateInput.max = maxDate;
+      
+      // Auto-set entry date within selected month
+      const now = new Date();
+      if (now.getFullYear() === currentYear && now.getMonth() === currentMonth) {
+        dateInput.value = `${monthKey}-${String(now.getDate()).padStart(2, '0')}`;
+      } else {
+        dateInput.value = minDate;
+      }
+    }
+
+    function getFilteredMonthExpenses() {
+      const prefix = getMonthKey(currentYear, currentMonth);
+      return expenses.filter(item => item.date.startsWith(prefix));
+    }
+
+    function renderMetrics(activeItems) {
+      const total = activeItems.reduce((acc, curr) => acc + Number(curr.amount), 0);
+      document.getElementById('statTotal').textContent = formatCurrency(total);
+
+      // Active unique spend days
+      const uniqueDays = new Set(activeItems.map(i => i.date)).size;
+      const avg = uniqueDays > 0 ? (total / uniqueDays) : 0;
+      document.getElementById('statAvg').textContent = formatCurrency(avg);
+      document.getElementById('statAvgDays').textContent = `${uniqueDays} active spend day${uniqueDays === 1 ? '' : 's'}`;
+
+      // Peak expense
+      if (activeItems.length > 0) {
+        const peak = activeItems.reduce((max, curr) => Number(curr.amount) > Number(max.amount) ? curr : max, activeItems[0]);
+        document.getElementById('statPeak').textContent = formatCurrency(peak.amount);
+        document.getElementById('statPeakNote').textContent = `${peak.note} (${peak.date.slice(-2)}th)`;
+      } else {
+        document.getElementById('statPeak').textContent = "—";
+        document.getElementById('statPeakNote').textContent = "No entries yet";
+      }
+
+      // Count & Top category
+      document.getElementById('statCount').textContent = activeItems.length;
+      if (activeItems.length > 0) {
+        const catMap = {};
+        activeItems.forEach(i => {
+          catMap[i.category] = (catMap[i.category] || 0) + Number(i.amount);
+        });
+        const topCat = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0];
+        const pct = ((topCat[1] / (total || 1)) * 100).toFixed(0);
+        document.getElementById('statTopCat').textContent = `Top: ${topCat[0]} (${pct}%)`;
+      } else {
+        document.getElementById('statTopCat').textContent = "Top: None";
+      }
+    }
+
+    function renderCharts(activeItems) {
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const dailyMap = {};
+      for (let d = 1; d <= daysInMonth; d++) {
+        dailyMap[d] = 0;
+      }
+
+      const catMap = {};
+
+      activeItems.forEach(item => {
+        const day = parseInt(item.date.split('-')[2], 10);
+        if (dailyMap[day] !== undefined) {
+          dailyMap[day] += Number(item.amount);
+        }
+        catMap[item.category] = (catMap[item.category] || 0) + Number(item.amount);
+      });
+
+      const hasData = activeItems.length > 0;
+
+      // Handle Daily Chart
+      const dailyEmpty = document.getElementById('dailyChartEmpty');
+      const catEmpty = document.getElementById('categoryChartEmpty');
+
+      if (!hasData) {
+        dailyEmpty.classList.remove('hidden');
+        catEmpty.classList.remove('hidden');
+      } else {
+        dailyEmpty.classList.add('hidden');
+        catEmpty.classList.add('hidden');
+      }
+
+      // Daily Trend Chart
+      const labels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+      const dailyValues = labels.map(dayNum => dailyMap[parseInt(dayNum, 10)]);
+
+      if (dailyChart) dailyChart.destroy();
+      const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+      dailyChart = new Chart(dailyCtx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Daily Spend (₹)',
+            data: dailyValues,
+            backgroundColor: '#3f3f46',
+            hoverBackgroundColor: '#e4e4e7',
+            borderRadius: 3,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => `Day ${items[0].label}`,
+                label: (item) => formatCurrency(item.raw)
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false, drawBorder: false },
+              ticks: { color: '#71717a', font: { family: 'Geist Mono', size: 10 } }
+            },
+            y: {
+              grid: { color: '#27272a' },
+              ticks: {
+                color: '#71717a',
+                font: { family: 'Geist Mono', size: 10 },
+                callback: (val) => '₹' + val
+              }
+            }
+          }
+        }
+      });
+
+      // Category Chart
+      const catLabels = Object.keys(catMap);
+      const catValues = Object.values(catMap);
+      const palette = ['#e4e4e7', '#a1a1aa', '#71717a', '#52525b', '#3f3f46', '#27272a', '#18181b', '#09090b'];
+
+      if (categoryChart) categoryChart.destroy();
+      const catCtx = document.getElementById('categoryChart').getContext('2d');
+      categoryChart = new Chart(catCtx, {
+        type: 'doughnut',
+        data: {
+          labels: catLabels,
+          datasets: [{
+            data: catValues,
+            backgroundColor: palette.slice(0, catLabels.length),
+            borderColor: '#18181b',
+            borderWidth: 2,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ${formatCurrency(ctx.raw)}`
+              }
+            }
+          }
+        }
+      });
+
+      // Render category legend
+      const legendContainer = document.getElementById('categoryLegend');
+      const totalMonth = activeItems.reduce((acc, curr) => acc + Number(curr.amount), 0) || 1;
+      document.getElementById('categoryCountTag').textContent = `${catLabels.length} Categories`;
+
+      if (catLabels.length === 0) {
+        legendContainer.innerHTML = `<span class="text-zinc-400 font-mono text-center block py-1">No category distribution</span>`;
+      } else {
+        legendContainer.innerHTML = catLabels.map((cat, idx) => {
+          const val = catMap[cat];
+          const pct = ((val / totalMonth) * 100).toFixed(1);
+          return `
+            <div class="flex items-center justify-between text-zinc-300 font-mono">
+              <div class="flex items-center gap-2 truncate">
+                <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${palette[idx % palette.length]}"></span>
+                <span class="truncate">${cat}</span>
+              </div>
+              <span class="text-zinc-400">${pct}%</span>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function renderLedger(activeItems) {
+      const tbody = document.getElementById('ledgerTableBody');
+      const emptyState = document.getElementById('tableEmptyState');
+      const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+      const catFilter = document.getElementById('categoryFilter').value;
+
+      // Filter rows by search and category dropdown
+      const filtered = activeItems.filter(item => {
+        const matchesSearch = !searchQuery || 
+          item.note.toLowerCase().includes(searchQuery) ||
+          item.amount.toString().includes(searchQuery);
+        const matchesCat = (catFilter === 'ALL') || (item.category === catFilter);
+        return matchesSearch && matchesCat;
+      });
+
+      // Sort chronological descending (most recent first)
+      filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      document.getElementById('ledgerBadgeCount').textContent = `${filtered.length} entries`;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      tbody.innerHTML = filtered.map(item => `
+        <tr class="hover:bg-zinc-900/60 transition-colors group">
+          <td class="py-3 px-3 text-zinc-400 whitespace-nowrap">${item.date}</td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <span class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">${item.category}</span>
+          </td>
+          <td class="py-3 px-3 text-zinc-200 font-sans break-words max-w-xs">${escapeHtml(item.note)}</td>
+          <td class="py-3 px-3 text-right font-medium text-white whitespace-nowrap">${formatCurrency(item.amount)}</td>
+          <td class="py-3 px-3 text-right whitespace-nowrap">
+            <button onclick="deleteExpense('${item.id}')" title="Delete record" class="text-zinc-600 hover:text-red-400 transition-colors p-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function escapeHtml(string) {
+      const div = document.createElement('div');
+      div.textContent = string;
+      return div.innerHTML;
+    }
+
+    // Refresh entire view
+    function refreshView() {
+      updateDateHeaders();
+      const monthItems = getFilteredMonthExpenses();
+      renderMetrics(monthItems);
+      renderCharts(monthItems);
+      renderLedger(monthItems);
+    }
+
+    // Add entry
+    document.getElementById('expenseForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const date = document.getElementById('entryDate').value;
+      const amount = parseFloat(document.getElementById('entryAmount').value);
+      const category = document.getElementById('entryCategory').value;
+      const note = document.getElementById('entryNote').value.trim();
+
+      if (!date || isNaN(amount) || amount <= 0 || !note) {
+        alert("Please specify a valid date, positive spend amount, and description.");
+        return;
+      }
+
+      const newExpense = {
+        id: 'exp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        date: date,
+        amount: amount,
+        category: category,
+        note: note
+      };
+
+      expenses.push(newExpense);
+      saveData();
+
+      // If user logs for a different month/year, automatically switch view to that month
+      const [entryY, entryM] = date.split('-').map(Number);
+      currentYear = entryY;
+      currentMonth = entryM - 1;
+
+      // Reset form fields except date
+      document.getElementById('entryAmount').value = '';
+      document.getElementById('entryNote').value = '';
+      document.getElementById('entryNote').focus();
+
+      refreshView();
+    });
+
+    // Delete expense
+    window.deleteExpense = function(id) {
+      if (!confirm("Are you sure you want to remove this record?")) return;
+      expenses = expenses.filter(i => i.id !== id);
+      saveData();
+      refreshView();
+    };
+
+    // Month Navigation Controls (Can move through any past or future years)
+    document.getElementById('prevMonthBtn').addEventListener('click', () => {
+      currentMonth--;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      }
+      refreshView();
+    });
+
+    document.getElementById('nextMonthBtn').addEventListener('click', () => {
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+      refreshView();
+    });
+
+    document.getElementById('currentMonthBtn').addEventListener('click', () => {
+      const d = new Date();
+      currentYear = d.getFullYear();
+      currentMonth = d.getMonth();
+      refreshView();
+    });
+
+    // Native Month Picker Selection
+    document.getElementById('monthPicker').addEventListener('change', function(e) {
+      if (!e.target.value) return;
+      const [y, m] = e.target.value.split('-').map(Number);
+      currentYear = y;
+      currentMonth = m - 1;
+      refreshView();
+    });
+
+    // Filter listeners
+    document.getElementById('searchInput').addEventListener('input', () => {
+      renderLedger(getFilteredMonthExpenses());
+    });
+
+    document.getElementById('categoryFilter').addEventListener('change', () => {
+      renderLedger(getFilteredMonthExpenses());
+    });
+
+    // Export current month as CSV
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      const items = getFilteredMonthExpenses();
+      if (items.length === 0) {
+        alert("No entries to export for this month.");
+        return;
+      }
+      let csv = "Date,Category,Note,Amount\n";
+      items.forEach(i => {
+        csv += `"${i.date}","${i.category}","${i.note.replace(/"/g, '""')}",${i.amount}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Spend_Report_${getMonthKey(currentYear, currentMonth)}.csv`;
+      link.click();
+    });
+
+    // Clear all storage button
+    document.getElementById('clearMonthDataBtn').addEventListener('click', () => {
+      if (confirm("Reset and clear all saved expense records across all years?")) {
+        expenses = [];
+        saveData();
+        refreshView();
+      }
+    });
+
+    // Initialize application
+    loadData();
+    refreshView();
+  </script>
+</body>
+</html>
